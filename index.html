@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unmind Nova - Smart Prospecting Workspace</title>
+    <!-- Chosen Palette: "Calm Harmony Neutrals" - Reusing the established palette for brand consistency. -->
+    <!-- Application Structure Plan: This application is a dynamic tool designed for a single task: on-demand prospect analysis. The structure is a simple, three-stage workflow: 1. **Input:** A "smart" input bar that detects input type (single URL, search URL, or text query). 2. **Action:** A prominent button to trigger the AI analysis via an n8n webhook. 3. **Output:** A well-defined display area that shows different types of analysis (dossier, list summary, or research summary) based on the input. This design maximizes flexibility and efficiency. -->
+    <!-- Visualization & Content Choices: The core of this app is dynamic content generation based on flexible inputs. The key elements are: 
+        - Smart Input Field -> Goal: Capture any prospect query -> Presentation: Standard HTML input with enhanced placeholder text.
+        - Button -> Goal: Trigger n8n workflow -> Presentation: Styled button with clear call-to-action.
+        - Dynamic Dossier Display -> Goal: Present tailored AI analysis -> Presentation: Formatted text blocks that adapt to the type of output from the AI (dossier, list, or research summary).
+        - Library/Method: Vanilla JavaScript for input detection and fetch requests to the n8n webhook. Tailwind CSS for styling. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .loader {
+            border: 4px solid #f3f3f3; /* light grey */
+            border-top: 4px solid #0d9488; /* teal-600 */
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 font-sans text-slate-800">
+
+    <header class="bg-white shadow-sm">
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-slate-900">
+                <span class="text-teal-600">Unmind Nova</span>
+                <span class="font-light">| Smart Prospecting Workspace</span>
+            </h1>
+        </div>
+    </header>
+
+    <main class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+        <div class="bg-white p-8 rounded-lg shadow-md">
+            <h2 class="text-xl font-bold text-slate-900 mb-2">AI-Powered Prospecting Assistant</h2>
+            <p class="text-slate-600 mb-6">Paste a LinkedIn URL (profile or search) or type a research query to generate real-time analysis and talking points.</p>
+            
+            <div class="flex items-center gap-4">
+                <input type="text" id="smart-input" placeholder="Enter LinkedIn URL or research query..." class="w-full px-4 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition">
+                <button id="generate-button" class="bg-teal-600 text-white font-bold py-2 px-6 rounded-md hover:bg-teal-700 transition-colors flex-shrink-0">
+                    Analyze
+                </button>
+            </div>
+        </div>
+
+        <div id="output-container" class="mt-8">
+            <!-- This area will be populated with the generated dossier or a loading/error message -->
+        </div>
+
+    </main>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const generateButton = document.getElementById('generate-button');
+            const smartInput = document.getElementById('smart-input');
+            const outputContainer = document.getElementById('output-container');
+
+            const N8N_WEBHOOK_URL = 'https://n8n.srv827325.hstgr.cloud/webhook/unmind-prospect-generator'; // Using the production webhook now
+
+            const copyToClipboard = (text, buttonElement) => {
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+
+                const originalText = buttonElement.innerHTML;
+                buttonElement.textContent = 'Copied!';
+                setTimeout(() => {
+                    buttonElement.innerHTML = originalText;
+                }, 2000);
+            };
+
+            const detectInputType = (input) => {
+                if (input.startsWith('https://www.linkedin.com/in/')) {
+                    return 'profile';
+                }
+                if (input.startsWith('https://www.linkedin.com/search/results/')) {
+                    return 'search';
+                }
+                return 'query';
+            };
+            
+            const renderOutput = (data) => {
+                // Assuming the n8n workflow returns a JSON object with a 'type' field and 'content' field.
+                const { type, content } = data;
+
+                let outputHTML = '';
+
+                if (type === 'dossier') {
+                    const prioritiesHTML = content.priorities.map(p => `<li>${p}</li>`).join('');
+                    outputHTML = `
+                        <div class="bg-white p-8 rounded-lg shadow-md">
+                            <h3 class="text-lg font-bold text-slate-900 mb-4">Generated Dossier</h3>
+                            <div class="mb-6">
+                                <h4 class="font-bold text-slate-800">Stated Priorities & Philosophy</h4>
+                                <ul class="list-disc list-inside space-y-1 text-slate-600 mt-2">${prioritiesHTML}</ul>
+                            </div>
+                            <div>
+                                <h4 class="font-bold text-slate-800">Tailored Messaging Hook</h4>
+                                <p class="text-slate-700 bg-slate-100 p-4 rounded-md border mt-2">${content.message}</p>
+                            </div>
+                        </div>
+                    `;
+                } else if (type === 'list_summary') {
+                     outputHTML = `
+                        <div class="bg-white p-8 rounded-lg shadow-md">
+                            <h3 class="text-lg font-bold text-slate-900 mb-4">Strategic List Analysis</h3>
+                            <p class="text-slate-600">${content.summary}</p>
+                            <ul class="list-disc list-inside space-y-2 text-slate-700 mt-4">
+                                ${content.top_prospects.map(p => `<li><strong>${p.name}:</strong> ${p.reason}</li>`).join('')}
+                            </ul>
+                        </div>
+                    `;
+                } else if (type === 'research_summary') {
+                    outputHTML = `
+                        <div class="bg-white p-8 rounded-lg shadow-md">
+                            <h3 class="text-lg font-bold text-slate-900 mb-4">Live Research Summary</h3>
+                             <p class="text-slate-600 mb-4">${content.summary}</p>
+                            <div class="border-t pt-4">
+                               <h4 class="font-semibold text-slate-800">Key Findings & Talking Points:</h4>
+                               <ul class="list-disc list-inside space-y-2 text-slate-700 mt-2">${content.findings.map(f => `<li>${f}</li>`).join('')}</ul>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                     outputHTML = `<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg" role="alert">
+                          <strong class="font-bold">Invalid Response!</strong><span class="block sm:inline"> The AI analysis returned an unknown format.</span></div>`;
+                }
+                
+                outputContainer.innerHTML = outputHTML;
+            };
+
+            const generateAnalysis = async () => {
+                const inputValue = smartInput.value.trim();
+                const inputType = detectInputType(inputValue);
+
+                if (!inputValue) {
+                    outputContainer.innerHTML = `<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg" role="alert">
+                          <strong class="font-bold">Input Required!</strong><span class="block sm:inline"> Please enter a URL or query.</span></div>`;
+                    return;
+                }
+
+                outputContainer.innerHTML = `
+                    <div class="bg-white p-8 rounded-lg shadow-md flex flex-col items-center">
+                        <div class="loader"></div>
+                        <p class="mt-4 text-slate-600 font-medium">Performing AI analysis... Please wait.</p>
+                        <p class="mt-2 text-sm text-slate-500">This may take up to 30 seconds for deep research.</p>
+                    </div>
+                `;
+                generateButton.disabled = true;
+                generateButton.classList.add('opacity-50', 'cursor-not-allowed');
+
+                try {
+                    const response = await fetch(N8N_WEBHOOK_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            inputType: inputType,
+                            inputValue: inputValue
+                        }),
+                    });
+
+                    if (!response.ok) throw new Error(`Network response error: ${response.status}`);
+                    
+                    const result = await response.json();
+                    
+                    // The n8n 'Respond to Webhook' node sends back the direct output of the last connected node.
+                    // We assume the last node (Gemini) is configured to output JSON with the structure our renderOutput function expects.
+                    renderOutput(result);
+
+                } catch (error) {
+                    console.error('Error generating analysis:', error);
+                    outputContainer.innerHTML = `
+                        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg" role="alert">
+                          <strong class="font-bold">Analysis Failed!</strong>
+                          <span class="block sm:inline"> Could not generate the analysis. Please check your input and the n8n workflow.</span>
+                          <p class="text-xs mt-2">Error: ${error.message}</p>
+                        </div>
+                    `;
+                } finally {
+                    generateButton.disabled = false;
+                    generateButton.classList.remove('opacity-50', 'cursor-not-allowed');
+                }
+            };
+
+            generateButton.addEventListener('click', generateAnalysis);
+            smartInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    generateAnalysis();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
